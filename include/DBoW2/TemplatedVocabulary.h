@@ -266,13 +266,13 @@ public:
    * Loads the vocabulary from a binary file
    * @param filename
    */
-   bool loadFromBinFile(const std::string &filename);
- 
+  bool loadFromBinaryFile(const std::string &filename);
+
   /**
    * Saves the vocabulary into a binary file
    * @param filename
    */
-   void saveToBinFile(const std::string &filename) const;
+  void saveToBinaryFile(const std::string &filename) const;  
   /** 
    * Stops those words whose weight is below minWeight.
    * Words are stopped by setting their weight to 0. There are not returned
@@ -1616,117 +1616,6 @@ bool TemplatedVocabulary<TDescriptor,F>::loadFromTextFile(const std::string &fil
 }
 
 // --------------------------------------------------------------------------
- 
- //TODO: the file is never closed?
- template<class TDescriptor, class F>
- bool TemplatedVocabulary<TDescriptor,F>::loadFromBinFile(const std::string &filename)
- {
-     std::ifstream f;
-     f.open(filename.c_str());
- 
-     if(f.eof()) {
-       return false;
-     }
- 
-     if(f.fail()) {
-       std::cerr << "An error occured while opening the input stream." << std::endl;
-       return false;
-     }
- 
-     m_words.clear();
-     m_nodes.clear();
- 
-     f.read((char*)&m_k,sizeof(m_k));
-     f.read((char*)&m_L,sizeof(m_L));
-     int n1, n2;
-     f.read((char*)&n1,sizeof(n1));
-     f.read((char*)&n2,sizeof(n2));
- 
-     if(m_k<0 || m_k>20 || m_L<1 || m_L>10 || n1<0 || n1>5 || n2<0 || n2>3)
-     {
-         std::cerr << "Vocabulary loading failure: This is not a correct Binary file!" << std::endl;
-         return false;
-     }
- 
-     m_scoring = (ScoringType)n1;
-     m_weighting = (WeightingType)n2;
-     createScoringObject();
- 
-     // nodes
-     int expected_nodes =
-             (int)((pow((double)m_k, (double)m_L + 1) - 1)/(m_k - 1));
-     m_nodes.reserve(expected_nodes);
-     m_words.reserve(pow((double)m_k, (double)m_L + 1));
-     m_nodes.resize(1);
-     m_nodes[0].id = 0;
-    // while(!f.eof())
-     while((!f.eof()) && ( m_nodes.size()<(unsigned int)expected_nodes) )
-     {
-         int nid = m_nodes.size();
-         m_nodes.resize(m_nodes.size()+1);
-         m_nodes[nid].id = nid;
-         int pid ;
-         f.read((char*)&pid,sizeof(pid));
-         m_nodes[nid].parent = pid;
-         m_nodes[pid].children.push_back(nid);
-         int nIsLeaf;
-         unsigned char nIsLeafuc;
-         f.read((char*)&nIsLeafuc,sizeof(nIsLeafuc));
-         nIsLeaf=nIsLeafuc;
-         unsigned char array[F::L]; // the number of element is stored in F::L
-         f.read((char*)array,(long)F::L);
-         m_nodes[nid].descriptor.create(1, F::L, CV_8U);
-         F::fromArray8U(m_nodes[nid].descriptor,(unsigned char *)array);
-         f.read((char*)&m_nodes[nid].weight,sizeof(m_nodes[nid].weight));
-         if(nIsLeaf>0)
-         {
-             int wid = m_words.size();
-             m_words.resize(wid+1);
-             m_nodes[nid].word_id = wid;
-             m_words[wid] = &m_nodes[nid];
-         }
-         else
-         {
-             m_nodes[nid].children.reserve(m_k);
-         }
-     }
- 
-     return true;
- 
- }
- // --------------------------------------------------------------------------
- 
- template<class TDescriptor, class F>
- void TemplatedVocabulary<TDescriptor,F>::saveToBinFile(const std::string &filename) const
- {
-     std::fstream f;
-     f.open(filename.c_str(),std::ios_base::out);
-     f.write((const char*)&m_k,sizeof(m_k));
-     f.write((const char*)&m_L,sizeof(m_L));
-     f.write((const char*)&m_scoring,sizeof(m_scoring));
-     f.write((const char*)&m_weighting,sizeof(m_weighting));
-     unsigned int nbiter=m_nodes.size();
-     // nbiter=2; //for test
-     unsigned char one=1;
-     unsigned char zero=0;
-     //    unsigned char tab[10]={1,2,4,6,10,100,200,201,202,255};  f.write((const char*)tab,10); //for test
-     for(size_t i=1; i<nbiter-1;i++)
-     {
-         const Node& node = m_nodes[i];
-         f.write((const char*)& node.parent ,sizeof( node.parent ));
-         if(node.isLeaf())
-             f.write((const char*)& one ,sizeof( one ));
-         else
-             f.write((const char*)& zero ,sizeof( zero ));
-         unsigned char array[F::L]; // the number of elements is stored in F::L
-         F::toArray8U(node.descriptor,(unsigned char *)array);
-         f.write((char*)array,(long)F::L);
-         f.write((const char*)& node.weight ,sizeof( node.weight ));
-     }
-     f.close();
- }
-
-// --------------------------------------------------------------------------
 
 template<class TDescriptor, class F>
 void TemplatedVocabulary<TDescriptor,F>::saveToTextFile(const std::string &filename) const
@@ -1751,6 +1640,81 @@ void TemplatedVocabulary<TDescriptor,F>::saveToTextFile(const std::string &filen
     f.close();
 }
 
+
+// --------------------------------------------------------------------------
+ 
+template<class TDescriptor, class F>
+bool TemplatedVocabulary<TDescriptor,F>::loadFromBinaryFile(const std::string &filename) {
+  std::fstream f;
+  f.open(filename.c_str(), std::ios_base::in|std::ios::binary);
+  unsigned int nb_nodes, size_node;
+  f.read((char*)&nb_nodes, sizeof(nb_nodes));
+  f.read((char*)&size_node, sizeof(size_node));
+  f.read((char*)&m_k, sizeof(m_k));
+  f.read((char*)&m_L, sizeof(m_L));
+  f.read((char*)&m_scoring, sizeof(m_scoring));
+  f.read((char*)&m_weighting, sizeof(m_weighting));
+  createScoringObject();
+  
+  m_words.clear();
+  m_words.reserve(pow((double)m_k, (double)m_L + 1));
+  m_nodes.clear();
+  m_nodes.resize(nb_nodes+1);
+  m_nodes[0].id = 0;
+  char* buf = new char [size_node];
+  int nid = 1;
+  while (!f.eof()) {
+	f.read(buf, size_node);
+	m_nodes[nid].id = nid;
+	// FIXME
+	const int* ptr=(int*)buf;
+	m_nodes[nid].parent = *ptr;
+	//m_nodes[nid].parent = *(const int*)buf;
+	m_nodes[m_nodes[nid].parent].children.push_back(nid);
+	m_nodes[nid].descriptor = cv::Mat(1, F::L, CV_8U); //F::L
+	memcpy(m_nodes[nid].descriptor.data, buf+4, F::L); //F::L
+	m_nodes[nid].weight = *(float*)(buf+4+F::L); // F::L
+	if (buf[8+F::L]) { // is leaf //F::L
+	  int wid = m_words.size();
+	  m_words.resize(wid+1);
+	  m_nodes[nid].word_id = wid;
+	  m_words[wid] = &m_nodes[nid];
+	}
+	else
+	  m_nodes[nid].children.reserve(m_k);
+	nid+=1;
+  }
+  f.close();
+
+  delete[] buf;
+  return true;
+}
+
+
+// --------------------------------------------------------------------------
+
+template<class TDescriptor, class F>
+void TemplatedVocabulary<TDescriptor,F>::saveToBinaryFile(const std::string &filename) const {
+  std::fstream f;
+  f.open(filename.c_str(), std::ios_base::out|std::ios::binary);
+  unsigned int nb_nodes = m_nodes.size();
+  float _weight;
+  unsigned int size_node = sizeof(m_nodes[0].parent) + F::L*sizeof(char) + sizeof(_weight) + sizeof(bool); //F::L
+  f.write((char*)&nb_nodes, sizeof(nb_nodes));
+  f.write((char*)&size_node, sizeof(size_node));
+  f.write((char*)&m_k, sizeof(m_k));
+  f.write((char*)&m_L, sizeof(m_L));
+  f.write((char*)&m_scoring, sizeof(m_scoring));
+  f.write((char*)&m_weighting, sizeof(m_weighting));
+  for(size_t i=1; i<nb_nodes;i++) {
+	const Node& node = m_nodes[i];
+	f.write((char*)&node.parent, sizeof(node.parent));
+	f.write((char*)node.descriptor.data, F::L);//F::L
+	_weight = node.weight; f.write((char*)&_weight, sizeof(_weight));
+	bool is_leaf = node.isLeaf(); f.write((char*)&is_leaf, sizeof(is_leaf)); // i put this one at the end for alignement....
+  }
+  f.close();
+}
 
 // --------------------------------------------------------------------------
 
