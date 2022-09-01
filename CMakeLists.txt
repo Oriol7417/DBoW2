@@ -4,6 +4,7 @@ include(ExternalProject)
 
 option(BUILD_DBoW2   "Build DBoW2"            ON)
 option(BUILD_Demo    "Build demo application" ON)
+option(BUILD_Test    "Build test application" ON)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
@@ -49,6 +50,13 @@ if(BUILD_Demo)
   set_target_properties(demo PROPERTIES CXX_STANDARD 11)
   file(COPY demo/images DESTINATION ${CMAKE_BINARY_DIR}/)
 endif(BUILD_Demo)
+
+if(BUILD_Test)
+  add_executable(test test/test.cpp)
+  target_link_libraries(test ${PROJECT_NAME} ${OpenCV_LIBS})
+  set_target_properties(test PROPERTIES CXX_STANDARD 11)
+  # file(COPY demo/images DESTINATION ${CMAKE_BINARY_DIR}/)
+endif(BUILD_Test)
 
 configure_file(src/DBoW2.cmake.in
   "${PROJECT_BINARY_DIR}/DBoW2Config.cmake" @ONLY)
